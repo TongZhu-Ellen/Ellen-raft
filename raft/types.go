@@ -5,6 +5,8 @@ import (
     "sync"
     "time"
     "6.5840/labrpc"
+	"context"
+	
 )
 
 
@@ -77,9 +79,10 @@ type Raft struct {
 	lastApplied int
 	
 	// for leader only:
-	repliCh    []chan struct{}
-	nextIndex  []int
-	matchIndex []int
+	repliCh    	 []chan struct{}
+	leaderCancel context.CancelFunc
+	nextIndex 	 []int
+	matchIndex 	 []int
 
 	
 

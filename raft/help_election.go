@@ -1,6 +1,7 @@
 package raft 
 
 import "time"
+import "context"
 
 /*
 持锁的一个子行为。
@@ -13,7 +14,12 @@ set currentTerm = T, convert to follower
 
 func (rf *Raft) toFollower() {
 
+	
+	if rf.state == Leader {
+        rf.leaderCancel()
+    }
 	rf.state = Follower
+	
 
 }
 
@@ -32,13 +38,15 @@ func (rf *Raft) becomeLeader() {
 	rf.state = Leader
 
 	lastLogIndex := rf.logLength() - 1
+	ctx, cancel := context.WithCancel(context.Background())
+	rf.leaderCancel = cancel
 
 	rf.repliCh = make([]chan struct{}, len(rf.peers))
 	rf.nextIndex = make([]int, len(rf.peers))  
 	rf.matchIndex = make([]int, len(rf.peers)) 
 
 	for i := range rf.peers {
-		if i == rf.me { 
+		if i == rf.me {
 			rf.nextIndex[i] = -1
 			rf.matchIndex[i] = -1
 			continue
@@ -47,16 +55,36 @@ func (rf *Raft) becomeLeader() {
 		rf.repliCh[i] = make(chan struct{}, 1)
 		rf.nextIndex[i] = lastLogIndex + 1 // "initialized to leader's lastLogIndex + 1"
 		rf.matchIndex[i] = 0 // "initialized to 0"
-		go rf.replicator(i)
+		go rf.replicator(i, rf.repliCh[i], ctx)
 	}
+
+	go rf.leaderTicker(ctx, rf.repliCh)
+
+
+
 	
+}
+
+func (rf *Raft) leaderTicker(ctx context.Context, repliCh []chan struct{}) {
+    ticker := time.NewTicker(HEATBEAT_INTERVAL)
+    defer ticker.Stop()
+
+    for {
+        select {
+        case <-ctx.Done():
+            return
+
+        case <-ticker.C:
+            rf.allReplicatorGo(repliCh)
+        }
+    }
 }
 
 
 func (rf *Raft) newGen(term int) { 
 
 	rf.currentTerm = term
-	rf.state = Follower
+	rf.toFollower()
 	rf.votedFor = -1
 
 	rf.persist()

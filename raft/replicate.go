@@ -1,6 +1,7 @@
 package raft 
 
 import "time"
+import "context"
 
 
 
@@ -35,41 +36,52 @@ type AppendEntriesReply struct {
 
 
 
+func (rf *Raft) allReplicatorGo(repliCh []chan struct{}) {
+    for i := range rf.peers {
+        if i == rf.me {
+            continue
+        }
 
+        select {
+        case repliCh[i] <- struct{}{}:
+        default:
+        }
+    }
+}
 
 
 // helper func; can only be called by leader!
-func (rf *Raft) replicator(i int) {
-	ticker := time.NewTicker(HEATBEAT_INTERVAL)
-	defer ticker.Stop()
-
-
-	for !rf.killed() {
-		rf.mu.Lock()
-		ch := rf.repliCh[i]
-		rf.mu.Unlock()
-		select {
-        case <-ticker.C:
-            rf.appendTillSucceed(i)
+func (rf *Raft) replicator(i int, ch chan struct{}, ctx context.Context) {
+    for {
+        select {
+        case <-ctx.Done():
+            return
 
         case <-ch:
-            // 有新日志，立刻发
-            rf.appendTillSucceed(i)
+            rf.appendTillSucceed(i, ctx)
         }
-		
-		
-	}
-
-
+    }
 }
 
-func (rf *Raft) appendTillSucceed(i int) {
-	anotherTry := true
-	for anotherTry {
-		anotherTry = rf.singleAppend(i)
-	}
-}
+func (rf *Raft) appendTillSucceed(i int, ctx context.Context) {
+    anotherTry := true
 
+    for anotherTry {
+
+		
+        anotherTry = rf.singleAppend(i)
+
+        if !anotherTry {
+            return
+        }
+
+        select {
+        case <-ctx.Done():
+            return
+        case <-time.After(10 * time.Millisecond):
+        }
+    }
+}
 
 
 
@@ -81,7 +93,7 @@ singleAppend 给 follower i 做一次 Log Replication。
 - true：这次没有完成 replication，需要 replicator 立即再次调用 singleAppend。
   典型情况：RPC 失败、Log 不一致需要调整 nextIndex 后重试。
 - false：这次不需要立即重试，等下一次 heartbeat/replication 周期。
-  典型情况：replication 成功、自己已经不是 Leader、发现新 Term、需要走 Snapshot。
+  
 */
 func (rf *Raft) singleAppend(i int) (retry bool) {
 	
@@ -90,6 +102,7 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
 		rf.mu.Unlock()
 		return false
 	}
+	
 	prevLogIndex := rf.nextIndex[i] - 1
 
 	
@@ -110,7 +123,7 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
     // ----------- Server 处理中！ --------------
 
 	if !ok { // 这是没发出去...  
-		time.Sleep(10 * time.Millisecond)
+		
 		return true
 	}
 
@@ -145,6 +158,33 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
 	rf.updateCommitIndex()
 	return false
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
  
 

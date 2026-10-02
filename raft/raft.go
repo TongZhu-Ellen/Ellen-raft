@@ -90,15 +90,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	
 	
 	rf.append(entry)
-	for i := range rf.repliCh {
-		if i == rf.me {
-			continue
-		}
-		select {
-		case rf.repliCh[i] <- struct{}{}: // 能送进去
-		default:
-		}
-	}
+	rf.allReplicatorGo(rf.repliCh) 
 	
 
 	index := rf.logLength() - 1 // index to be inserted to! 
@@ -127,6 +119,9 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 func (rf *Raft) Kill() {
 	atomic.StoreInt32(&rf.dead, 1)
 	// Your code here, if desired.
+	rf.mu.Lock()
+	rf.applyCond.Signal()
+	rf.mu.Unlock()
 }
 
 func (rf *Raft) killed() bool {
