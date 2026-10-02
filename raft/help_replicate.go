@@ -8,6 +8,28 @@ package raft
 
 
 
+
+
+
+
+
+func (rf *Raft) allReplicatorGo() {
+    for i := range rf.peers {
+        if i == rf.me {
+            continue
+        }
+
+        select {
+        case rf.repliCh[i] <- struct{}{}:
+        default:
+        }
+    }
+}
+
+
+
+
+
 /*
 
 	If there exists an N such that N > commitIndex, a majority
@@ -58,7 +80,7 @@ func (rf *Raft) updateCommitIndex() {
 
 
 
-// lastOfTerm returns the last log index with the given term, or -1 if not found.
+// lastIndexOfTerm returns the last log index with the given term, or -1 if not found.
 func (rf *Raft) lastIndexOfTerm(term int) int {
     for i := rf.logLength() - 1; i > 0; i-- {
         if rf.get(i).Term == term {
@@ -72,7 +94,7 @@ func (rf *Raft) lastIndexOfTerm(term int) int {
 func (rf *Raft) stepBack(server int, xTerm, xIndex, xLen int) {
     // 情况1：follower 日志太短
     if xTerm == -1 {
-        rf.nextIndex[server] = min(xLen, rf.logLength())
+        rf.nextIndex[server] = xLen
         return
     }
     // 情况2：找 leader 日志里有没有 XTerm

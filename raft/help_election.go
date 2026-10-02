@@ -58,27 +58,17 @@ func (rf *Raft) becomeLeader() {
 		go rf.replicator(i, rf.repliCh[i], ctx)
 	}
 
-	go rf.leaderTicker(ctx, rf.repliCh)
+
+	rf.allReplicatorGo()
+
+	
 
 
 
 	
 }
 
-func (rf *Raft) leaderTicker(ctx context.Context, repliCh []chan struct{}) {
-    ticker := time.NewTicker(HEATBEAT_INTERVAL)
-    defer ticker.Stop()
 
-    for {
-        select {
-        case <-ctx.Done():
-            return
-
-        case <-ticker.C:
-            rf.allReplicatorGo(repliCh)
-        }
-    }
-}
 
 
 func (rf *Raft) newGen(term int) { 

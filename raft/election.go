@@ -17,7 +17,17 @@ func (rf *Raft) ticker() {
 
 			
 			rf.becomeCandidate()
-			go rf.collectOpinion()
+
+
+			// 在持锁、term 刚 ++ 的这一刻就把 args 定死
+			lastLogIndex := rf.logLength() - 1
+			args := &RequestVoteArgs{
+				Term:         rf.currentTerm,
+				CandidateId:  rf.me,
+				LastLogIndex: lastLogIndex,
+				LastLogTerm:  rf.get(lastLogIndex).Term,
+			}
+			go rf.collectOpinion(args)
 		}
 		rf.mu.Unlock() // ------- 锁! -------
 
@@ -54,10 +64,10 @@ type RequestVoteReply struct {
 }
 
 
-func (rf *Raft) collectOpinion() {
+func (rf *Raft) collectOpinion(args *RequestVoteArgs) {
 
 	
-	supporter := 1
+	supporter := 1 // 只在持 rf.mu 时访问,没问题
 	
 
 
@@ -68,19 +78,10 @@ func (rf *Raft) collectOpinion() {
 		}
 
 		go func(server int) {
-			rf.mu.Lock() // ------- 锁 -------
-			lastLogIndex := rf.logLength() - 1
-			args := &RequestVoteArgs{
-				Term: rf.currentTerm,
-				CandidateId: rf.me,
-
-				LastLogIndex: lastLogIndex,
-				LastLogTerm: rf.get(lastLogIndex).Term,
-			}
 			reply := &RequestVoteReply{}
-			rf.mu.Unlock() // ------- 锁 -------
+			
 
-			ok := rf.sendRequestVote(server, args, reply)
+			ok := rf.sendRequestVote(server, args, reply)// args 只读,可共享
 
 			// ---------------- server 处理中！ ---------------
 

@@ -90,12 +90,13 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	
 	
 	rf.append(entry)
-	rf.allReplicatorGo(rf.repliCh) 
+
+	rf.allReplicatorGo()
 	
 
 	index := rf.logLength() - 1 // index to be inserted to! 
 	term := rf.currentTerm
-	isLeader := rf.state == Leader
+	isLeader := true
 
 	
 
@@ -121,6 +122,10 @@ func (rf *Raft) Kill() {
 	// Your code here, if desired.
 	rf.mu.Lock()
 	rf.applyCond.Signal()
+	
+	if rf.state == Leader {
+		rf.leaderCancel()
+	}
 	rf.mu.Unlock()
 }
 

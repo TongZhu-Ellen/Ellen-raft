@@ -36,51 +36,45 @@ type AppendEntriesReply struct {
 
 
 
-func (rf *Raft) allReplicatorGo(repliCh []chan struct{}) {
-    for i := range rf.peers {
-        if i == rf.me {
-            continue
-        }
 
-        select {
-        case repliCh[i] <- struct{}{}:
-        default:
-        }
-    }
-}
+
+
+
 
 
 // helper func; can only be called by leader!
 func (rf *Raft) replicator(i int, ch chan struct{}, ctx context.Context) {
+	
+
+
+	ticker := time.NewTicker(HEATBEAT_INTERVAL)
+	defer ticker.Stop()
+
     for {
         select {
         case <-ctx.Done():
             return
 
-        case <-ch:
-            rf.appendTillSucceed(i, ctx)
+		case <-ch:
+			rf.appendLoop(i, ctx)
+
+        case <-ticker.C:
+            rf.appendLoop(i, ctx)
         }
     }
 }
 
-func (rf *Raft) appendTillSucceed(i int, ctx context.Context) {
-    anotherTry := true
-
-    for anotherTry {
-
+func (rf *Raft) appendLoop(i int, ctx context.Context) {
+	for rf.singleAppend(i) {
 		
-        anotherTry = rf.singleAppend(i)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 
-        if !anotherTry {
-            return
-        }
-
-        select {
-        case <-ctx.Done():
-            return
-        case <-time.After(10 * time.Millisecond):
-        }
-    }
+	
+	}
 }
 
 
@@ -90,7 +84,7 @@ func (rf *Raft) appendTillSucceed(i int, ctx context.Context) {
 singleAppend 给 follower i 做一次 Log Replication。
 
 返回值 retry 表示：
-- true：这次没有完成 replication，需要 replicator 立即再次调用 singleAppend。
+- true：这次没有完成 replication，需要 appendLoop 立即再次调用 singleAppend。
   典型情况：RPC 失败、Log 不一致需要调整 nextIndex 后重试。
 - false：这次不需要立即重试，等下一次 heartbeat/replication 周期。
   
@@ -123,7 +117,7 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
     // ----------- Server 处理中！ --------------
 
 	if !ok { // 这是没发出去...  
-		
+		time.Sleep(10 * time.Millisecond)
 		return true
 	}
 
