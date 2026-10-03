@@ -4,18 +4,23 @@
 
 ## ① ticker
 
-- **数量**:每个 Raft 节点 1 个。
-- **启动**:`Make` 里 `go rf.ticker()`。
-- **怎么死**:循环条件是 `for rf.killed() == false`。每轮睡 50~350ms,醒来发现 `dead==1` 就退出。
-- **Kill 管不管**:不主动管。`Kill` 只置标志,不唤醒它,它靠自己下次醒来发现。所以回收延迟最多约 350ms。
+- **数量**:1/Raft
+- **启动**:`Make` 里 `go rf.ticker()`开启。
+- **怎么死**: 每轮睡 50~350ms,醒来发现 `dead==1` 就退出。
+- **我的个人看法**:低入侵。快速回收（最多350ms就回收了）。没毛病。
 
 ## ② applier
 
-- **数量**:每个节点 1 个。
-- **启动**:`Make` 里 `go rf.applier()`。
-- **怎么死**:它睡在 `applyCond.Wait()` 上。每次醒来先查 `killed()`,是就解锁 return,再查有没有活。
-- **Kill 管不管**:主动管。`Kill` 先置 `dead`,再持锁 `Signal` 唤醒它。因为"置标志"和"Signal"之间 `Kill` 要拿锁,而 applier 检查标志和进入 `Wait` 是在同一把锁里完成的,所以不会出现"刚检查完还没睡就错过通知"的情况。
-- **边界**:applier 往 `applyCh` 发送是在锁外进行的。如果上层不再读 `applyCh`,它会卡在发送上,Kill 唤醒不了它。这取决于上层是否一直消费。
+- **数量**:1/Raft
+- **启动**:Make 里  `go rf.applier() `开启。
+- **怎么死**: 这个和ticker不一样的地方在于，它不是自轮询的；它是有活了才会被rf.applyCond叫醒的。然后我让rf.Kill()在锁里面也提供叫醒。醒来之后检查一次是否死亡。
+- **内存泄漏风险点**：一旦`for _, apply := range applies {
+			rf.applyCh <- apply // 这里阻塞，例如上层停止消费 applyCh
+		}` 那么就跑不到检查Raft是否还活着的那个点了。
+
+
+
+  
 
 ## ③ replicator
 
