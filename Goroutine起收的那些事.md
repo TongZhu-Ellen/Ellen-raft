@@ -25,10 +25,16 @@
 ## ③ replicator
 
 - **数量**:每任 leader 创建 N-1 个,每个 follower 对应 1 个。
-- **启动**:`becomeLeader` 里创建一个 `context.WithCancel`,cancel 存进 `rf.leaderCancel`,再逐个 `go rf.replicator(i, ch, ctx)`。同一任的所有 replicator 共用这一个 ctx。
-- **怎么死**:`select` 收到 `ctx.Done()` 就 return。若它正在 `appendLoop` 里,`singleAppend` 开头会检查 `state != Leader`,返回 false 跳出循环,然后回到 `select` 看到 ctx 已取消,退出。
-- **Kill 管不管**:管,但有条件。`Kill` 里如果 `state == Leader` 就调 `leaderCancel()`。降级也是同一个出口:`toFollower` 判断之前是 leader 就 cancel。被高 term 打下台、收到同 term 的 AppendEntries、`Kill`,三条路径都走这一个 cancel。
-- **边界**:如果 `Kill` 发生时节点是 candidate,之后某个投票回包到达并触发 `becomeLeader`,这一任 replicator 会在 Kill 之后才创建,没人 cancel。`singleAppend` 只检查 `state`,不检查 `killed()`。这是个窗口很小的泄漏,我建议你在 `becomeLeader` 或 `singleAppend` 里加一句 `killed()` 检查来补上。
+- **启动**:`becomeLeader` 时创建,每个 replicator 对应一个 follower。
+- **怎么死**:leader 退任或 Raft死亡时结束,被 `ctx.Done()` 赐死。实际运行时,我们按照 start 的指示以及 ticker 的指示进行发送。其中，等待发送的过程随时可以被打断,无限重试的looping间隙也可以被打断,但是一旦决定发 RPC那么它将不会受到类似打断。
+- 哦对了，这里引入ctx只是为了方便回收goroutine. RPC的发送实际上是三段式的。不存在“打断PRC的发送和处理的过程以另类实现raft安全性”的创举..... 莫要误会。
+- **我的个人看法**:replicator 基本上在所有可能无限滞留地方都留了退出路径:等待发送可以打断,retry 的间隙可以打断；唯一已经开始、无法被 ctx 打断的 RPC,本身又有 timeout。也就是说, 像防止自然灾害一般防止goroutine泄露。
+
+
+
+
+
+
 
 ## ④ collectOpinion 与投票 goroutine
 
