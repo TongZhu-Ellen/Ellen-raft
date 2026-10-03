@@ -35,29 +35,9 @@
 
 
 
-
 ## ④ collectOpinion 与投票 goroutine
 
-- **数量**:每次选举 1 个协调者(`collectOpinion`),它再派出 N-1 个投票 goroutine。协调者派完活就退出,只有投票 goroutine 继续跑。
-- **启动**:`ticker` 判定超时、`becomeCandidate` 之后 `go rf.collectOpinion(args)`。
-- **怎么死**:每个投票 goroutine 发一次 `RequestVote`,回包后做一次带校验的计票(`reply.Term`、`state == Candidate`、`currentTerm == args.Term`),然后退出。
-- **Kill 管不管**:不管,也不需要管。它们的生命周期就是一次 RPC,`Call` 返回就结束。
+- **数量**:每次选举 1 个协调者(`collectOpinion`) + 它负责派出的 N-1 个投票 goroutine。协调者派完活就结束, 投票 goroutine 等待直到RPC回包。
 
-## ⑤ singleAppend 里的 RPC goroutine
+- **我的个人看法**: 哈哈哈这种goroutine的本质是一个完整的RPC周期。依托于RPC的timeout机制所以会在有限时间内返回。不过这也造成了一个开始我认为很奇观的景象：raft已经死亡但是PRC的回复逻辑却还在跑。Raft论文难懂的原因之一。
 
-- **数量**:每次 `singleAppend` 调用 1 个。
-- **启动**:`singleAppend` 构造好 args 之后,放进 goroutine 里发 RPC。
-- **怎么死**:主流程用 `select` 等结果或等 200ms 超时。超时后主流程放弃,但那个 goroutine 还在等 `Call` 返回。`okCh` 容量是 1,所以它返回后能无阻塞地写入然后退出。
-- **Kill 管不管**:不管。没有 ctx 管它，它靠 Call 自己返回。
-
-## 一眼汇总
-
-| 单元 | 数量 | Kill 时 |
-|---|---|---|
-| ticker | 1 / 节点 | 被动退出,≤350ms |
-| applier | 1 / 节点 | 主动唤醒后退出 |
-| replicator | N-1 / 每任 leader | 若是 leader 则 cancel |
-| 投票 goroutine | N-1 / 每次选举 | 自行随 RPC 结束 |
-| RPC goroutine | 1 / 每次发送 | 自行随 RPC 结束 |
-
-前两个是常驻的,生命周期跟节点走。replicator 跟 leader 任期走。后两种跟一次 RPC 走。四类生命周期各用了不同的回收机制:标志位加轮询、条件变量唤醒、context 取消、靠 RPC 自然返回。
