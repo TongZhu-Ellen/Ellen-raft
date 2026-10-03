@@ -110,7 +110,18 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
     reply := &AppendEntriesReply{}
     rf.mu.Unlock() // ----------- 锁 --------------
 
-    ok := rf.sendAppendEntries(i, args, reply) 
+    // 原来是 ok := rf.sendAppendEntries(i, args, reply)
+	okCh := make(chan bool, 1)
+	go func() {
+		okCh <- rf.sendAppendEntries(i, args, reply)
+	}()
+
+	var ok bool
+	select {
+	case ok = <-okCh:
+	case <-time.After(APPENDPRC_TIMEOUT):
+		ok = false
+	}
 
     // ----------- Server 处理中！ --------------
 
@@ -119,7 +130,7 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
 		return true
 	}
 
-	// 这里！
+	
 
 
 	rf.mu.Lock() // ----------- 锁 --------------

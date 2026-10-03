@@ -7,6 +7,7 @@ import "time"
 const (
 	SELECTION_TIMEOUT = 500 * time.Millisecond
 	HEATBEAT_INTERVAL =  100 * time.Millisecond
+    APPENDPRC_TIMEOUT = 200 * time.Millisecond
 	
 )
 
