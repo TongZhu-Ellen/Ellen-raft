@@ -153,9 +153,17 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
     if !reply.Success {
     rf.nextIndex[i]--
     return true
+
+		
 }
 
 
+
+	
+	// 不变量:每个 follower 只有一个 replicator goroutine,且 appendLoop 内串行发送,
+	// 所以同一个 follower 的回包不会乱序交错,这里直接赋值不会让 matchIndex 回退。
+	// 如果以后改成并发发送(比如流水线),必须改成 max(旧值, 新值)。
+	
 	rf.matchIndex[i] = prevLogIndex + len(args.Entries)
 	rf.nextIndex[i]  = rf.matchIndex[i] + 1
 	rf.updateCommitIndex()
