@@ -26,10 +26,7 @@ type AppendEntriesReply struct {
 	
 	// 2B:
 	Success bool
-	XTerm   int  // 冲突的 term
-    XIndex  int  // 该 term 第一条 log 的 index
-    XLen    int  // log 长度（用于 prevLogIndex 超出范围的情况）
-
+	
 
 }
 
@@ -99,6 +96,7 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
 	
 	prevLogIndex := rf.nextIndex[i] - 1
 
+
 	
     args := &AppendEntriesArgs{
 		Term: rf.currentTerm,
@@ -142,9 +140,9 @@ func (rf *Raft) singleAppend(i int) (retry bool) {
 	// "If AppendEntries fails because of log inconsistency: decrement nextIndex and retry"
     // "If successful: update nextIndex and matchIndex for follower"
     if !reply.Success {
-		rf.stepBack(i, reply.XTerm, reply.XIndex, reply.XLen)
-		return true
-	}
+    rf.nextIndex[i]--
+    return true
+}
 
 
 	rf.matchIndex[i] = prevLogIndex + len(args.Entries)
@@ -252,22 +250,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 
 	// 2. "Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm"
-    if args.PrevLogIndex >= rf.logLength() {
-		reply.XTerm = -1
-		reply.XIndex = -1
-		reply.XLen = rf.logLength()
+	if rf.logLength() <= args.PrevLogIndex {
 		reply.Term = rf.currentTerm
 		reply.Success = false
 		return
 	}
+
 	if rf.get(args.PrevLogIndex).Term != args.PrevLogTerm {
-		reply.XTerm = rf.get(args.PrevLogIndex).Term
-		xIndex := args.PrevLogIndex
-		for xIndex-1 >= 1 && rf.get(xIndex-1).Term == reply.XTerm {
-			xIndex--
-		}
-		reply.XIndex = xIndex
-		reply.XLen = -1
 		reply.Term = rf.currentTerm
 		reply.Success = false
 		return

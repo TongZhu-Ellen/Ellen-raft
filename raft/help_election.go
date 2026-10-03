@@ -3,6 +3,7 @@ package raft
 import "time"
 import "context"
 
+
 /*
 持锁的一个子行为。
 在论文里面对应的是 If RPC request or response contains term T > currentTerm:
@@ -35,6 +36,8 @@ func (rf *Raft) becomeCandidate() {
 
 
 func (rf *Raft) becomeLeader() {
+
+	// fmt.Printf("SERVER %d BECOME LEADER term=%d\n", rf.me, rf.currentTerm)
 	rf.state = Leader
 
 	lastLogIndex := rf.logLength() - 1

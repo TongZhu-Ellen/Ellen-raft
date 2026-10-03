@@ -30,6 +30,8 @@ func (rf *Raft) allReplicatorGo() {
 
 
 
+
+
 /*
 
 	If there exists an N such that N > commitIndex, a majority
@@ -90,22 +92,7 @@ func (rf *Raft) lastIndexOfTerm(term int) int {
     return -1
 }
 
-// leader专属函数
-func (rf *Raft) stepBack(server int, xTerm, xIndex, xLen int) {
-    // 情况1：follower 日志太短
-    if xTerm == -1 {
-        rf.nextIndex[server] = xLen
-        return
-    }
-    // 情况2：找 leader 日志里有没有 XTerm
-    if term := rf.lastIndexOfTerm(xTerm); term != -1 {
-        // leader 也有这个 term，冲突在这个 term 的结尾之后，从 start + 1 开始发
-        rf.nextIndex[server] = term + 1
-    } else {
-        // leader 没有这个 term，follower 这个 term 的日志全是错的，从 XIndex 开始覆盖
-        rf.nextIndex[server] = xIndex
-    }
-}
+
 
 // reconcileEntries 从 myIdx（本地日志全局index）和 yourIdx（entries切片下标）开始，
 // 将incoming entries与本地日志逐条比对：遇到term冲突则截断本地日志，

@@ -126,6 +126,8 @@ func (rf *Raft) Kill() {
 	if rf.state == Leader {
 		rf.leaderCancel()
 	}
+
+
 	rf.mu.Unlock()
 }
 

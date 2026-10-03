@@ -47,6 +47,9 @@ func (rf *Raft) logLength() int { // this is the real length of all the things h
 
 
 
+
+
+
 func (rf *Raft) append(entry Entry) {
 
 	rf.log = append(rf.log, entry)

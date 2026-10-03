@@ -97,6 +97,8 @@ func (rf *Raft) collectOpinion(args *RequestVoteArgs) {
 				rf.newGen(reply.Term)
 			}
 
+			
+
 			if reply.VoteGranted && rf.state == Candidate && rf.currentTerm == args.Term {
 				supporter++
 				if supporter > len(rf.peers) / 2 {
